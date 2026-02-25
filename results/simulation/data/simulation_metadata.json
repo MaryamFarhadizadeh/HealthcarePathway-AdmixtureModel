@@ -1,0 +1,7 @@
+{
+  "N_PATIENTS": 400,
+  "RANDOM_SEED": 42,
+  "SIMULATION_SCENARIO": "step1_medium",
+  "BACKBONE_MODE": "three_source",
+  "CFG": "ScenarioConfig(p_add_vertical_noise=0.35, max_vertical_noise=1, p_add_horizontal_noise=0.2, max_horizontal_nodes=1, p_repeat_node=0.08, p_skip_node=0.05, p_add_anchor=0.75, major_alpha=8.0, minor_alpha=1.2)"
+}
