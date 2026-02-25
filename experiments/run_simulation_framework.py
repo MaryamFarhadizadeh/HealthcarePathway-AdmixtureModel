@@ -267,7 +267,7 @@ def main():
         prune_abs_threshold=SIMULATION_SETTINGS.simplification.prune_abs_threshold,
         manual_protected_state_ids=SIMULATION_SETTINGS.simplification.manual_protected_state_ids,
     )
-    dot_full = render_train_graph(mystart_full, istates_full)
+    dot_full = render_train_graph(mystart_full, istates_full, show_legend=False)
     dot_full.render(step1_full_dir / "graph", format="pdf", cleanup=True)
     print(f"Saved full-data graph: {step1_full_dir / 'graph.pdf'}")
 
@@ -293,7 +293,7 @@ def main():
             manual_protected_state_ids=SIMULATION_SETTINGS.simplification.manual_protected_state_ids,
         )
 
-        dot_train = render_train_graph(mystart_train, istates_train)
+        dot_train = render_train_graph(mystart_train, istates_train, show_legend=False)
         dot_train.render(seed_dir / "graph", format="pdf", cleanup=True)
 
         train_states = sorted(a_df_train["states"].astype(int).unique())

@@ -116,7 +116,7 @@ def run_simplification_pipeline(
 
 #------------Rendering the graph-----------------
 #------------Rendering the graph-----------------
-def render_train_graph(mystart, istates):
+def render_train_graph(mystart, istates, show_legend=True):
 
     protected = istates.copy()
     protected.append(Node.startstate)
@@ -172,20 +172,21 @@ def render_train_graph(mystart, istates):
         dot.node(node.id, label, **node_attributes, fillcolor=color)
 
     # -------- LEGEND --------
-    legend_label = f"""<
-    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
-      <TR><TD COLSPAN="2"><B>Legend</B></TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["0"]}"> </TD><TD>Prostate cancer diagnosis</TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["10, 119"]}"> </TD><TD>Fusion biopsy</TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["30"]}"> </TD><TD>Cystography</TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["54"]}"> </TD><TD>PET-CT</TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["106"]}"> </TD><TD>Open Prostatectomy</TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["106, 119"]}"> </TD><TD>Robotic-Assisted Prostatectomy</TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["164"]}"> </TD><TD>Multimodal psychotherapeutic treatment</TD></TR>
-      <TR><TD BGCOLOR="{COLOR_MAP["166"]}"> </TD><TD>Hospital discharge</TD></TR>
-    </TABLE>>"""
+    if show_legend:
+        legend_label = f"""<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+          <TR><TD COLSPAN="2"><B>Legend</B></TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["0"]}"> </TD><TD>Prostate cancer diagnosis</TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["10, 119"]}"> </TD><TD>Fusion biopsy</TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["30"]}"> </TD><TD>Cystography</TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["54"]}"> </TD><TD>PET-CT</TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["106"]}"> </TD><TD>Open Prostatectomy</TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["106, 119"]}"> </TD><TD>Robotic-Assisted Prostatectomy</TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["164"]}"> </TD><TD>Multimodal psychotherapeutic treatment</TD></TR>
+          <TR><TD BGCOLOR="{COLOR_MAP["166"]}"> </TD><TD>Hospital discharge</TD></TR>
+        </TABLE>>"""
 
-    dot.attr(label=legend_label, labelloc="t", labeljust="r")
+        dot.attr(label=legend_label, labelloc="t", labeljust="r")
 
     # -------- ADD EDGES --------
     # Allocate incoming edge counts per child so the sum of incoming

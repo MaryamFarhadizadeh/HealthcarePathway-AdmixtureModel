@@ -1,10 +1,10 @@
 # Simulation Results
 
 This folder contains outputs generated from simulated data only.
-
+Real-data outputs remain in `results/step1`, `results/step2`, and `results/step3`.
 
 ## Last Updated (UTC)
-2026-02-25 15:39:43 UTC
+2026-02-25 23:31:26 UTC
 
 ## Active Settings Profile
 - profile: `SIMULATION_SETTINGS`
@@ -16,8 +16,10 @@ This folder contains outputs generated from simulated data only.
 
 ## Simplification Thresholds
 - importance_keep_threshold: `20.0`
+- unimportant_threshold: `20.0`
 - prune_rel_threshold: `0.1`
 - prune_abs_threshold: `3`
+- manual_protected_state_ids: `[91, 166]`
 
 ## Simulation Code Mapping
 `code_map` comes from `SIMULATION_SETTINGS.code_map`.
