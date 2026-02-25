@@ -1,0 +1,88 @@
+# Applying the Framework to Simulated Data
+
+This guide explains how to run the full pathway-admixture framework on simulated data only.
+
+## What this runs
+
+The simulation pipeline runs:
+
+1. Step 1: graph construction and simplification
+2. Step 2: transition matrices and admixture estimation (`EM`, `SLSQP`)
+3. Step 3: clustering and admixture plots
+4. Recovery evaluation: estimated `q` vs simulated ground-truth `theta`
+
+All simulation outputs are written under:
+
+- `results/simulation/`
+
+
+## Prerequisites
+
+From repo root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+If you already use the existing project venv, just activate it.
+
+## Configure the simulation
+
+Main generator config:
+
+- `Simulation/Simulation.py`
+
+Key controls:
+
+- `N_PATIENTS`
+- `SIMULATION_SCENARIO` (`step1_easy`, `step1_medium`, `step1_hard`)
+- `BACKBONE_MODE` (`two_source`, `three_source`)
+
+Framework profile for simulation runs:
+
+- `src/pathway_admixture/settings_profiles.py`
+- `SIMULATION_SETTINGS` controls:
+  - `min_state_count`
+  - `n_clusters`
+  - `code_map`
+  - simplification thresholds (`importance_keep_threshold`, `prune_abs_threshold`, etc.)
+
+## Run the full simulation framework
+
+From repo root:
+
+```bash
+PYTHONPATH=src .venv/bin/python experiments/run_simulation_framework.py
+```
+
+## Evaluate recovery quality
+
+Compare estimated admixture (`q`) to simulated truth (`theta`):
+
+```bash
+PYTHONPATH=src .venv/bin/python experiments/evaluate_simulation_recovery.py
+```
+
+Outputs:
+
+- `results/simulation/evaluation/recovery_metrics.csv`
+- `results/simulation/evaluation/recovery_summary.csv`
+
+## Main output files
+
+- `results/simulation/data/simulated_events.csv`
+- `results/simulation/data/simulated_patients_truth.csv`
+- `results/simulation/data/state_mapping.csv`
+- `results/simulation/step1/full_data/graph.pdf`
+- `results/simulation/step1/training_splits/seed_*/graph.pdf`
+- `results/simulation/step2/q_vectors_seed_*_em.csv`
+- `results/simulation/step2/q_vectors_seed_*_slsqp.csv`
+- `results/simulation/step3/seed_*_*/admixture_barplot.png`
+
+## Notes on interpretation
+
+- If Step 3 shows only 2 chains, verify `BACKBONE_MODE` and whether Step 1 recovered only 2 top-level branches.
+- Recovery metrics are scenario-dependent; `step1_hard` should score worse than `step1_easy`.
+- `results/simulation/README.md` is auto-refreshed by the runner with exact settings used for each run.

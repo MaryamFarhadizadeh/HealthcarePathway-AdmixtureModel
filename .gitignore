@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Build/package metadata
+*.egg-info/
+dist/
+build/
+
+# Local outputs/results
+results/
+!results/.gitkeep
+
+# Local data (keep structure only)
+data/
+!data/.gitkeep
+
+# Legacy/private archive (keep local, do not publish)
+archive/
+
+# Matplotlib/font caches
+.cache/
+.mplconfig/
