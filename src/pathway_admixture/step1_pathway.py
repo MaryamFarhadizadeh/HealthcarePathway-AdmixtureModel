@@ -116,7 +116,9 @@ def run_simplification_pipeline(
 
 #------------Rendering the graph-----------------
 #------------Rendering the graph-----------------
-def render_train_graph(mystart, istates, show_legend=True):
+def render_train_graph(mystart, istates, show_legend=True, first_state_only=False, color_map=None):
+
+    active_color_map = COLOR_MAP if color_map is None else color_map
 
     protected = istates.copy()
     protected.append(Node.startstate)
@@ -126,64 +128,79 @@ def render_train_graph(mystart, istates, show_legend=True):
     node_attributes = {
         'shape': 'rectangle',
         'style': 'filled',
-        'fontname': 'Helvetica'
+        'fontname': 'Helvetica',
+        'fontsize': '19',
+        'fontcolor': 'black',
+        'margin': '0.30,0.20',
+        'width': '1.8',
+        'height': '0.9',
+        'penwidth': '0',
     }
 
     dot = graphviz.Digraph(comment='Typical Pathways (TRAIN)')
     dot.graph_attr["rankdir"] = "LR"
+    dot.graph_attr["ranksep"] = "0.35"
+    dot.graph_attr["nodesep"] = "0.75"
+    dot.graph_attr["ratio"] = "compress"
 
     # -------- ADD NODES --------
     for node in allnodes:
 
         # Root node
         if len(node.parents) == 0:
-            label = f"0: {node.count}"
-            color = COLOR_MAP["0"]
+            label = f"0\n(n = {node.count})"
+            color = active_color_map.get("0", "#8787BF")
 
         else:
             pmatch = list(set(node.states.keys()) & set(protected))
 
             if len(pmatch) > 0:
                 state_str = listToStr(eval(pmatch[0]))
-                color = COLOR_MAP.get(state_str, "lightblue")
+                color = active_color_map.get(state_str, "lightblue")
 
-                label = f"{state_str}: {sum(node.states.values())}"
+                label = f"{state_str}\n(n = {sum(node.states.values())})"
 
-                if len(node.states) > 1:
+                if len(node.states) > 1 and not first_state_only:
                     label += ";"
 
-                for key in sorted(node.states.keys()):
-                    if key != pmatch[0]:
-                        diff = list(set(eval(key)) ^ set(eval(pmatch[0])))
-                        label += f"\n{listToStr(diff)}: {node.states[key]}"
+                if not first_state_only:
+                    for key in sorted(node.states.keys()):
+                        if key != pmatch[0]:
+                            diff = list(set(eval(key)) ^ set(eval(pmatch[0])))
+                            label += f"\n{listToStr(diff)}: {node.states[key]}"
 
             elif len(node.states) == 1:
                 key = list(node.states.keys())[0]
-                label = f"{listToStr(eval(key))}: {node.states[key]}"
+                label = f"{listToStr(eval(key))}\n(n = {node.states[key]})"
                 color = "lightblue"
 
             else:
-                label = "B:" + str(node.count) + "\n" + "\n".join(
-                    f"{listToStr(eval(key))}: {node.states[key]}"
-                    for key in sorted(node.states.keys())
-                )
+                if first_state_only:
+                    first_key = sorted(node.states.keys())[0]
+                    label = f"{listToStr(eval(first_key))}\n(n = {sum(node.states.values())})"
+                else:
+                    label = "B:" + str(node.count) + "\n" + "\n".join(
+                        f"{listToStr(eval(key))}: {node.states[key]}"
+                        for key in sorted(node.states.keys())
+                    )
                 color = "lightblue"
 
-        dot.node(node.id, label, **node_attributes, fillcolor=color)
+        bold_label = f"<<B>{label.replace(chr(10), '<BR/>')}</B>>"
+        dot.node(node.id, bold_label, **node_attributes, fillcolor=color)
 
     # -------- LEGEND --------
     if show_legend:
         legend_label = f"""<
         <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
-          <TR><TD COLSPAN="2"><B>Legend</B></TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["0"]}"> </TD><TD>Prostate cancer diagnosis</TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["10, 119"]}"> </TD><TD>Fusion biopsy</TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["30"]}"> </TD><TD>Cystography</TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["54"]}"> </TD><TD>PET-CT</TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["106"]}"> </TD><TD>Open Prostatectomy</TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["106, 119"]}"> </TD><TD>Robotic-Assisted Prostatectomy</TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["164"]}"> </TD><TD>Multimodal psychotherapeutic treatment</TD></TR>
-          <TR><TD BGCOLOR="{COLOR_MAP["166"]}"> </TD><TD>Hospital discharge</TD></TR>
+          <TR><TD COLSPAN="2"><B>Clinical event types</B></TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("0", "#8787BF")}"> </TD><TD>Prostate cancer diagnosis</TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("10, 119", "#D1ABCF")}"> </TD><TD>Fusion biopsy</TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("30", "#8FC4D1")}"> </TD><TD>Cystography</TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("54", "#8EEDC3")}"> </TD><TD>PET-CT</TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("106", "#B8C7D9")}"> </TD><TD>Open Prostatectomy</TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("106, 119", "#809FD1")}"> </TD><TD>Robotic-Assisted Prostatectomy</TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("164", "#9CF6FB")}"> </TD><TD>Multimodal psychotherapeutic treatment</TD></TR>
+          <TR><TD BGCOLOR="{active_color_map.get("166", "#5477A7")}"> </TD><TD>Hospital discharge</TD></TR>
         </TABLE>>"""
 
         dot.attr(label=legend_label, labelloc="t", labeljust="r")

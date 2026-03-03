@@ -56,6 +56,14 @@ RESULT_BASE = BASE_DIR / "results" / "simulation"
 SEEDS = list(SIMULATION_SETTINGS.seeds)
 MIN_STATE_COUNT = SIMULATION_SETTINGS.min_state_count
 N_CLUSTERS = SIMULATION_SETTINGS.n_clusters
+CUSTOM_CLUSTER_COLORS = ["#6C8EBF", "#9BBFA6", "#D9A66B"]
+CUSTOM_PATHWAY_COLORS = ["#809FD1", "#8787BF", "#B8C7D9"]
+SIMULATION_STEP1_PALETTE = [
+    "#8787BF", "#8FC4D1", "#8EEDC3", "#B8C7D9", "#9CF6FB",
+    "#4682B4", "#809FD1", "#D1ABCF", "#A0D6B4", "#D9A6A6",
+    "#9BBFA6", "#D9C39B", "#A8B8D8", "#C0D8E8", "#B9D9D9",
+    "#AEC6CF", "#C3B1E1", "#FFD6A5", "#BDE0FE", "#E2F0CB",
+]
 
 
 def write_simulation_readme(result_base: Path, simulation_metadata=None):
@@ -175,24 +183,140 @@ def to_framework_df(df_events):
     return out, code_to_state
 
 
-def make_cluster_scatter(q_clustered, q_cols, output_path, title):
+def build_simulation_step1_color_map(state_values):
+    state_values = sorted({int(s) for s in state_values})
+    color_map = {"0": "#8787BF"}
+    for i, state in enumerate(state_values):
+        if state == 0:
+            continue
+        color_map[str(state)] = SIMULATION_STEP1_PALETTE[i % len(SIMULATION_STEP1_PALETTE)]
+    # Keep a stable dark color for discharge if present.
+    if 166 in state_values:
+        color_map["166"] = "#5477A7"
+    return color_map
+
+
+def make_cluster_scatter(q_clustered, q_cols, output_path_png, output_path_pdf):
     if len(q_cols) < 2:
         return
-    plt.figure(figsize=(8, 6))
-    sns.scatterplot(
-        x=q_clustered[q_cols[0]],
-        y=q_clustered[q_cols[1]],
-        hue=q_clustered["cluster"],
-        palette="Dark2",
-        alpha=0.8,
-    )
-    plt.title(title)
+
+    sns.set_theme(style="white", font_scale=1.1)
+    clusters = sorted(q_clustered["cluster"].unique())
+    color_map = {cl: CUSTOM_CLUSTER_COLORS[i] for i, cl in enumerate(clusters)}
+
+    plt.figure(figsize=(7, 6))
+    for cl in clusters:
+        sub = q_clustered[q_clustered["cluster"] == cl]
+        plt.scatter(
+            sub[q_cols[0]],
+            sub[q_cols[1]],
+            s=90,
+            alpha=0.95,
+            edgecolor="white",
+            linewidth=0.6,
+            color=color_map[cl],
+            label=f"Cluster {int(cl) + 1}",
+            zorder=2,
+        )
+
+    plt.xlim(-0.05, 1.05)
+    plt.ylim(-0.05, 1.05)
+    plt.xlabel(r"Admixture weight $q_{i1}$")
+    plt.ylabel(r"Admixture weight $q_{i2}$")
+    plt.title("Admixture space", weight="bold", pad=10)
+    plt.legend(title="Patient cluster", frameon=False)
+    sns.despine()
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path_png, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path_pdf, dpi=400, bbox_inches="tight")
     plt.close()
 
 
-def make_admixture_barplot(q_clustered, output_path, title):
+def make_cluster_scatter_jitter(q_clustered, q_cols, output_path_png, output_path_pdf):
+    if len(q_cols) < 2:
+        return
+
+    rng = np.random.default_rng(42)
+    jitter = rng.normal(0.0, 5e-3, size=(len(q_clustered), 2))
+    jittered = q_clustered[q_cols[:2]].values + jitter
+    clusters = sorted(q_clustered["cluster"].unique())
+    color_map = {cl: CUSTOM_CLUSTER_COLORS[i] for i, cl in enumerate(clusters)}
+    point_colors = q_clustered["cluster"].map(color_map)
+
+    plt.figure(figsize=(7, 6))
+    plt.scatter(
+        jittered[:, 0],
+        jittered[:, 1],
+        c=point_colors,
+        s=65,
+        alpha=0.85,
+        edgecolor="black",
+        linewidth=0.3,
+    )
+    handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=color_map[cl],
+            markersize=8,
+            label=f"Cluster {int(cl) + 1}",
+        )
+        for cl in clusters
+    ]
+    plt.legend(handles=handles, title="Cluster", frameon=True)
+    plt.xlabel(r"Admixture weight $q_{i1}$")
+    plt.ylabel(r"Admixture weight $q_{i2}$")
+    plt.title("Admixture space for Axes")
+    plt.xlim(-0.05, 1.05)
+    plt.ylim(-0.05, 1.05)
+    plt.grid(alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(output_path_png, dpi=300)
+    plt.savefig(output_path_pdf, bbox_inches="tight")
+    plt.close()
+
+
+def make_cluster_size_with_q(q_clustered, output_path_pdf):
+    q_cols = [c for c in q_clustered.columns if c.startswith("q")]
+    if not q_cols:
+        return
+
+    cluster_counts = q_clustered["cluster"].value_counts().sort_index()
+    cluster_means = q_clustered.groupby("cluster")[q_cols].mean()
+    colors = CUSTOM_PATHWAY_COLORS[: len(q_cols)]
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    bottoms = np.zeros(len(cluster_counts))
+    for i, (col, color) in enumerate(zip(q_cols, colors)):
+        values = cluster_means[col].values * cluster_counts.values
+        ax.bar(
+            cluster_counts.index.astype(str),
+            values,
+            bottom=bottoms,
+            color=color,
+            edgecolor="white",
+            linewidth=0.8,
+            label=f"Pathway {i+1}",
+        )
+        bottoms += values
+
+    ax.set_xlabel("Patient cluster")
+    ax.set_ylabel("Number of patients")
+    ax.set_title("Pathway-specific model contributions", weight="bold", pad=10)
+
+    for i, count in enumerate(cluster_counts.values):
+        ax.text(i, count + max(cluster_counts.values) * 0.02, str(count), ha="center", fontweight="bold")
+
+    ax.legend(title="Pathway", frameon=False)
+    sns.despine()
+    plt.tight_layout()
+    plt.savefig(output_path_pdf, dpi=400, bbox_inches="tight")
+    plt.close()
+
+
+def make_admixture_barplot(q_clustered, output_path):
     q_cols = [c for c in q_clustered.columns if c.startswith("q")]
     if not q_cols:
         return
@@ -207,7 +331,7 @@ def make_admixture_barplot(q_clustered, output_path, title):
     data_q = data_q.sort_values(["dominant", "dominant_val"], ascending=[True, False])
     data_q = data_q.drop(columns=["dominant", "dominant_val"]).reset_index(drop=True)
 
-    colors = ["#1D4A91", "#AE232F", "#B8B9DA", "#228B22", "#FF7F0E", "#9467BD"]
+    colors = CUSTOM_PATHWAY_COLORS
     n = len(data_q)
     k = len(q_cols)
 
@@ -219,15 +343,60 @@ def make_admixture_barplot(q_clustered, output_path, title):
             ax.bar(i, val, bottom=bottom, width=1.0, color=colors[j % len(colors)], linewidth=0)
             bottom += val
 
-    ax.set_ylabel("Estimated Contribution")
-    ax.set_xlabel("Individuals")
+    ax.set_ylabel("Admixture weight")
+    ax.set_xlabel("Patients (ordered by dominant pathway contribution)")
     ax.set_ylim(0, 1)
     ax.set_xlim([-1, n])
-    ax.set_title(title)
+    ax.set_title("Admixture proportions across the three pathway-specific models")
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend([f"Chain {i+1}" for i in range(k)], bbox_to_anchor=(1.01, 1), loc="upper left", frameon=False)
+    ax.legend([f"Pathway {i+1}" for i in range(k)], bbox_to_anchor=(1.01, 1), loc="upper left", frameon=False)
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)
+    plt.close()
+
+
+def plot_metric_with_na(ax, df, metric_col, title, color, ylim=None):
+    labels = df["seed"].tolist()
+    raw_vals = df[metric_col]
+    vals = raw_vals.fillna(0.0).to_numpy()
+    x = np.arange(len(labels))
+
+    ax.bar(x, vals, color=color)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_title(title, weight="bold")
+    ax.set_xlabel("Train-test split")
+    ax.set_ylabel("Validation score")
+
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+
+    if len(vals) > 0:
+        mean_val = np.nanmean(vals)
+        ax.axhline(mean_val, linestyle="--", linewidth=1.2, color="black", alpha=0.6)
+
+    for idx, raw_val in enumerate(raw_vals):
+        if pd.isna(raw_val):
+            y_text = (ylim[1] * 0.05) if ylim else 0.05
+            ax.text(idx, y_text, "N/A", ha="center", fontsize=9)
+
+    sns.despine(ax=ax)
+
+
+def save_validation_figure(cluster_quality_df, out_path, panel_prefix=False):
+    sns.set_theme(style="whitegrid", font_scale=1.2)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), dpi=150)
+
+    t1 = "A. Silhouette Score" if panel_prefix else "Silhouette Score"
+    t2 = "B. Calinski-Harabasz Index" if panel_prefix else "Calinski-Harabasz Index"
+    t3 = "C. Davies-Bouldin Index" if panel_prefix else "Davies-Bouldin Index"
+
+    plot_metric_with_na(axes[0], cluster_quality_df, "silhouette", t1, "#E4EEFB", ylim=(0, 1))
+    plot_metric_with_na(axes[1], cluster_quality_df, "calinski_harabasz", t2, "#B6BDC8")
+    plot_metric_with_na(axes[2], cluster_quality_df, "davies_bouldin", t3, "#97BEE6")
+
+    plt.tight_layout()
+    fig.savefig(out_path, bbox_inches="tight")
     plt.close()
 
 
@@ -257,6 +426,7 @@ def main():
     print(f"Saved simulation data to: {data_dir}")
 
     print("Step 1 full-data graph on simulated data...")
+    simulation_step1_color_map = build_simulation_step1_color_map(df_framework["states"].astype(int).tolist())
     patvec_full = build_patient_objects(df_framework)
     mystart_full = build_prefix_tree(patvec_full)
     mystart_full, istates_full = run_simplification_pipeline(
@@ -267,7 +437,12 @@ def main():
         prune_abs_threshold=SIMULATION_SETTINGS.simplification.prune_abs_threshold,
         manual_protected_state_ids=SIMULATION_SETTINGS.simplification.manual_protected_state_ids,
     )
-    dot_full = render_train_graph(mystart_full, istates_full, show_legend=False)
+    dot_full = render_train_graph(
+        mystart_full,
+        istates_full,
+        show_legend=False,
+        color_map=simulation_step1_color_map,
+    )
     dot_full.render(step1_full_dir / "graph", format="pdf", cleanup=True)
     print(f"Saved full-data graph: {step1_full_dir / 'graph.pdf'}")
 
@@ -293,7 +468,12 @@ def main():
             manual_protected_state_ids=SIMULATION_SETTINGS.simplification.manual_protected_state_ids,
         )
 
-        dot_train = render_train_graph(mystart_train, istates_train, show_legend=False)
+        dot_train = render_train_graph(
+            mystart_train,
+            istates_train,
+            show_legend=False,
+            color_map=simulation_step1_color_map,
+        )
         dot_train.render(seed_dir / "graph", format="pdf", cleanup=True)
 
         train_states = sorted(a_df_train["states"].astype(int).unique())
@@ -390,21 +570,24 @@ def main():
             f.write(f"{silhouette:.6f}")
 
         q_cols = [c for c in q_df.columns if c.startswith("q")]
-        make_cluster_scatter(
+        make_cluster_scatter(q_clustered, q_cols, seed_result_dir / "cluster_plot.png", seed_result_dir / "cluster_plot.pdf")
+        make_cluster_scatter_jitter(
             q_clustered,
             q_cols,
-            seed_result_dir / "cluster_plot.png",
-            f"Simulation Seed {seed} ({method}) - Clustering",
+            seed_result_dir / "cluster_plot_jitter.png",
+            seed_result_dir / "cluster_plot_jitter.pdf",
         )
+        make_cluster_size_with_q(q_clustered, seed_result_dir / "cluster_sizes_with_q.pdf")
         make_admixture_barplot(
             q_clustered,
             seed_result_dir / "admixture_barplot.png",
-            f"Simulation Admixture Proportions ({seed}_{method})",
         )
 
         cluster_quality_rows.append(
             {
                 "seed": f"{seed}_{method}",
+                "seed_num": int(seed),
+                "method": method,
                 "silhouette": silhouette,
                 "calinski_harabasz": calinski,
                 "davies_bouldin": davies,
@@ -413,28 +596,21 @@ def main():
 
     if cluster_quality_rows:
         cluster_quality_df = pd.DataFrame(cluster_quality_rows)
-        sns.set_theme(style="whitegrid", font_scale=1.1)
-        fig, axes = plt.subplots(1, 3, figsize=(17, 5), dpi=150)
+        cluster_quality_df = cluster_quality_df.sort_values(["method", "seed_num"]).reset_index(drop=True)
+        cluster_quality_df.to_csv(step3_dir / "cluster_validation_metrics.csv", index=False)
 
-        sns.barplot(data=cluster_quality_df, x="seed", y="silhouette", color="#E4EEFB", edgecolor="black", ax=axes[0])
-        axes[0].set_title("Silhouette")
-        axes[0].set_ylim(0, 1)
+        save_validation_figure(cluster_quality_df, step3_dir / "cluster_validation.pdf", panel_prefix=True)
 
-        sns.barplot(data=cluster_quality_df, x="seed", y="calinski_harabasz", color="#B6BDC8", edgecolor="black", ax=axes[1])
-        axes[1].set_title("Calinski-Harabasz")
-
-        sns.barplot(data=cluster_quality_df, x="seed", y="davies_bouldin", color="#97BEE6", edgecolor="black", ax=axes[2])
-        axes[2].set_title("Davies-Bouldin")
-
-        for ax in axes:
-            ax.set_xlabel("Seed_Method")
-            ax.set_ylabel("Score")
-            ax.tick_params(axis="x", rotation=45)
-            ax.grid(axis="y", linestyle="--", alpha=0.4)
-
-        plt.tight_layout()
-        plt.savefig(step3_dir / "cluster_validation.pdf", bbox_inches="tight")
-        plt.close()
+        for method_name in ["em", "slsqp"]:
+            method_df = cluster_quality_df[cluster_quality_df["method"] == method_name].copy()
+            if method_df.empty:
+                continue
+            method_df["seed"] = method_df["seed_num"].astype(str)
+            save_validation_figure(
+                method_df,
+                step3_dir / f"cluster_validation_{method_name}.pdf",
+                panel_prefix=False,
+            )
 
     print(f"Saved Step 3 results: {step3_dir}")
     print("\nSimulation framework run completed.")

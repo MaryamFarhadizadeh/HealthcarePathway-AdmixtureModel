@@ -4,7 +4,7 @@ This folder contains outputs generated from simulated data only.
 Real-data outputs remain in `results/step1`, `results/step2`, and `results/step3`.
 
 ## Last Updated (UTC)
-2026-02-25 23:31:26 UTC
+2026-03-03 12:35:27 UTC
 
 ## Active Settings Profile
 - profile: `SIMULATION_SETTINGS`
