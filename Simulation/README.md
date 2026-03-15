@@ -2,6 +2,8 @@
 
 This guide explains how to run the full pathway-admixture framework on simulated data only.
 
+Current simulation logic: each patient has a Dirichlet-sampled admixture vector (`theta`), a dominant backbone label, and controlled within-trajectory backbone switching.
+
 ## What this runs
 
 The simulation pipeline runs:
@@ -72,14 +74,29 @@ Outputs:
 
 ## Main output files
 
-- `results/simulation/data/simulated_events.csv`
 - `results/simulation/data/simulated_patients_truth.csv`
-- `results/simulation/data/state_mapping.csv`
 - `results/simulation/step1/full_data/graph.pdf`
 - `results/simulation/step1/training_splits/seed_*/graph.pdf`
 - `results/simulation/step2/q_vectors_seed_*_em.csv`
 - `results/simulation/step2/q_vectors_seed_*_slsqp.csv`
-- `results/simulation/step3/seed_*_*/admixture_barplot.png`
+- `results/simulation/step3/seed_*_*/admixture_barplot.pdf`
+- `results/simulation/step3/seed_*_*/cluster_plot.pdf`
+- `results/simulation/step3/seed_*_*/cluster_plot_jitter.pdf`
+- `results/simulation/step3/seed_*_*/cluster_sizes_with_q.pdf`
+- `results/simulation/step3/cluster_validation_metrics.csv`
+- `results/simulation/step3/cluster_validation_em.pdf`
+- `results/simulation/step3/cluster_validation_slsqp.pdf`
+
+## Optional outputs (disabled by default)
+
+In `experiments/run_simulation_framework.py`, these defaults keep outputs clean:
+
+- `SAVE_CLUSTER_PNG = False`
+- `SAVE_STEP1_SPLIT_PICKLE = False`
+- `SAVE_STEP3_CLUSTERED_Q = False`
+- `SAVE_RAW_EVENT_TABLES = False`
+
+If you enable these flags, additional intermediate files (PNG plots, pickles, raw event tables, clustered_q CSVs) will be generated.
 
 ## Notes on interpretation
 

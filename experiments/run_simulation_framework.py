@@ -1,5 +1,5 @@
 """
-Run the full pathway admixture framework on simulated data (Option A).
+Run the full pathway admixture framework on simulated data.
 
 Outputs are written under:
     results/simulation/
@@ -87,7 +87,7 @@ def write_simulation_readme(result_base: Path, simulation_metadata=None):
 
     readme_text = f"""# Simulation Results
 
-Generated using Option A (single latent backbone per patient).
+Generated using a dominant-backbone + controlled-switching simulation design.
 
 ## Last Updated (UTC)
 {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}
