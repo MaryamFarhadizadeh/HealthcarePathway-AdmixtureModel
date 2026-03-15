@@ -1,24 +1,26 @@
 """
-Run the full pathway admixture framework on simulated data.
+Run the full pathway admixture framework on simulated data (Option A).
 
 Outputs are written under:
     results/simulation/
-so real-data results in results/step*/ are unchanged.
+so real-data results remain unchanged.
 """
 
 import pickle
 import random
 import os
 import json
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 
+import graphviz
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
-# Keep sklearn/joblib stable across local macOS setups.
+# Stabilize BLAS / joblib threading
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", "4")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -49,13 +51,15 @@ from pathway_admixture.settings_profiles import SIMULATION_SETTINGS
 # =====================================================
 # Configuration
 # =====================================================
+
 BASE_DIR = Path(__file__).resolve().parents[1]
-SIM_SCRIPT = BASE_DIR / "Simulation" / "Simulation.py"
+SIM_SCRIPT = BASE_DIR / "Simulation" / "Simulation2.py"
 RESULT_BASE = BASE_DIR / "results" / "simulation"
 
 SEEDS = list(SIMULATION_SETTINGS.seeds)
 MIN_STATE_COUNT = SIMULATION_SETTINGS.min_state_count
 N_CLUSTERS = SIMULATION_SETTINGS.n_clusters
+
 CUSTOM_CLUSTER_COLORS = ["#6C8EBF", "#9BBFA6", "#D9A66B"]
 CUSTOM_PATHWAY_COLORS = ["#809FD1", "#8787BF", "#B8C7D9"]
 SIMULATION_STEP1_PALETTE = [
@@ -65,6 +69,16 @@ SIMULATION_STEP1_PALETTE = [
     "#AEC6CF", "#C3B1E1", "#FFD6A5", "#BDE0FE", "#E2F0CB",
 ]
 
+# Output policy for repository cleanliness.
+SAVE_CLUSTER_PNG = False
+SAVE_STEP1_SPLIT_PICKLE = False
+SAVE_STEP3_CLUSTERED_Q = False
+SAVE_RAW_EVENT_TABLES = False
+
+
+# =====================================================
+# Metadata Writer
+# =====================================================
 
 def write_simulation_readme(result_base: Path, simulation_metadata=None):
     readme_path = result_base / "README.md"
@@ -73,48 +87,43 @@ def write_simulation_readme(result_base: Path, simulation_metadata=None):
 
     readme_text = f"""# Simulation Results
 
-This folder contains outputs generated from simulated data only.
-Real-data outputs remain in `results/step1`, `results/step2`, and `results/step3`.
+Generated using Option A (single latent backbone per patient).
 
 ## Last Updated (UTC)
 {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}
 
 ## Active Settings Profile
-- profile: `SIMULATION_SETTINGS`
-- seeds: `{list(s.seeds)}`
-- min_state_count: `{s.min_state_count}`
-- n_clusters: `{s.n_clusters}`
-- use_filtered_step1_results: `{s.use_filtered_step1_results}`
-- fixed_code_map_enabled: `{s.code_map is not None}`
+- seeds: {list(s.seeds)}
+- min_state_count: {s.min_state_count}
+- n_clusters: {s.n_clusters}
 
 ## Simplification Thresholds
-- importance_keep_threshold: `{simp.importance_keep_threshold}`
-- unimportant_threshold: `{simp.unimportant_threshold}`
-- prune_rel_threshold: `{simp.prune_rel_threshold}`
-- prune_abs_threshold: `{simp.prune_abs_threshold}`
-- manual_protected_state_ids: `{list(simp.manual_protected_state_ids)}`
-
-## Simulation Code Mapping
-`code_map` comes from `SIMULATION_SETTINGS.code_map`.
-It is used to convert simulation codes (e.g., `a`, `e`, `i`) to numeric state IDs.
+- importance_keep_threshold: {simp.importance_keep_threshold}
+- unimportant_threshold: {simp.unimportant_threshold}
+- prune_rel_threshold: {simp.prune_rel_threshold}
+- prune_abs_threshold: {simp.prune_abs_threshold}
 
 ## Output Structure
-- `data/`: simulated input exports and state mapping
-- `step1/`: train/test splits, graphs, transition-split artifacts
-- `step2/`: filtered transition matrices and q-vectors
-- `step3/`: clustering outputs, plots, and validation summary
-- `evaluation/`: recovery metrics (produced by `experiments/evaluate_simulation_recovery.py`)
+- data/
+- step1/
+- step2/
+- step3/
+- evaluation/
 """
+
     if simulation_metadata:
         readme_text += "\n## Simulation Generator Metadata\n"
         for key in sorted(simulation_metadata.keys()):
-            readme_text += f"- {key}: `{simulation_metadata[key]}`\n"
+            readme_text += f"- {key}: {simulation_metadata[key]}\n"
 
     readme_path.write_text(readme_text)
 
 
+# =====================================================
+# Load Simulation
+# =====================================================
+
 def load_and_simulate_events():
-    """Load simulation module and generate event-level/patient-level rows."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("simulation_module", SIM_SCRIPT)
@@ -123,26 +132,37 @@ def load_and_simulate_events():
 
     random.seed(sim.RANDOM_SEED)
     cohort = sim.simulate_cohort(sim.N_PATIENTS)
+
     metadata = {
         "N_PATIENTS": getattr(sim, "N_PATIENTS", None),
         "RANDOM_SEED": getattr(sim, "RANDOM_SEED", None),
         "SIMULATION_SCENARIO": getattr(sim, "SIMULATION_SCENARIO", None),
         "BACKBONE_MODE": getattr(sim, "BACKBONE_MODE", None),
-        "CFG": str(getattr(sim, "CFG", None)),
+        "DIRICHLET_ALPHA": getattr(sim.CFG, "dirichlet_alpha", None),
+        "BACKBONE_CODES": sorted(
+            {
+                code
+                for path in getattr(sim, "BACKBONES", {}).values()
+                for code in path
+            }
+        ),
     }
+
     rows = []
     patient_rows = []
+
     for patient in cohort:
+        latent_backbone = patient.get("latent_backbone", patient.get("backbone"))
         patient_rows.append(
             {
                 "patient_id": patient["patient_id"],
-                "backbone": patient.get("backbone"),
+                "latent_backbone": latent_backbone,
                 "theta_B1": patient.get("theta_B1"),
                 "theta_B2": patient.get("theta_B2"),
                 "theta_B3": patient.get("theta_B3"),
-                "n_source_switches": patient.get("n_source_switches"),
             }
         )
+
         t = 0
         for block in patient["trajectory"]:
             for code in block:
@@ -151,36 +171,34 @@ def load_and_simulate_events():
                         "patient_id": patient["patient_id"],
                         "time": t,
                         "code": code,
-                        "backbone": patient["backbone"],
+                        "latent_backbone": latent_backbone,
                     }
                 )
             t += 1
+
     return pd.DataFrame(rows), pd.DataFrame(patient_rows), metadata
 
 
+# =====================================================
+# Framework Conversion
+# =====================================================
+
 def to_framework_df(df_events):
-    """Convert simulation schema -> framework schema."""
     sim_code_map = SIMULATION_SETTINGS.code_map
+
     if sim_code_map is None:
-        code_values = sorted(df_events["code"].astype(str).unique())
-        code_to_state = {code: i + 1 for i, code in enumerate(code_values)}
+        codes = sorted(df_events["code"].astype(str).unique())
+        code_to_state = {c: i + 1 for i, c in enumerate(codes)}
     else:
         code_to_state = dict(sim_code_map)
-
-    missing_codes = sorted(set(df_events["code"].astype(str)) - set(code_to_state.keys()))
-    if missing_codes:
-        raise ValueError(f"Unmapped simulation codes found: {missing_codes}")
 
     df = df_events.copy()
     df["patient_num"] = df["patient_id"]
     df["states"] = df["code"].map(code_to_state).astype(int)
-    df = df.sort_values(["patient_num", "time", "states"]).copy()
+    df = df.sort_values(["patient_num", "time", "states"])
     df["pathOrder"] = df.groupby("patient_num").cumcount() + 1
 
-    # Keep only columns used by the framework.
-    out = df[["patient_num", "pathOrder", "states"]].copy()
-
-    return out, code_to_state
+    return df[["patient_num", "pathOrder", "states"]], code_to_state
 
 
 def build_simulation_step1_color_map(state_values):
@@ -190,10 +208,64 @@ def build_simulation_step1_color_map(state_values):
         if state == 0:
             continue
         color_map[str(state)] = SIMULATION_STEP1_PALETTE[i % len(SIMULATION_STEP1_PALETTE)]
-    # Keep a stable dark color for discharge if present.
     if 166 in state_values:
         color_map["166"] = "#5477A7"
     return color_map
+
+
+def _map_state_label_text(label_text, state_id_to_code, highlight_codes=None):
+    # Example inputs:
+    #   "119"
+    #   "10, 119"
+    highlight_codes = set(highlight_codes or [])
+    out = []
+    for token in label_text.split(","):
+        s = token.strip()
+        if s.lstrip("-").isdigit():
+            key = int(s)
+            code = str(state_id_to_code.get(key, s))
+            if code in highlight_codes:
+                out.append(f"<FONT COLOR='red'>{code}</FONT>")
+            else:
+                out.append(code)
+        else:
+            if s in highlight_codes:
+                out.append(f"<FONT COLOR='red'>{s}</FONT>")
+            else:
+                out.append(s)
+    return ", ".join(out)
+
+
+def render_train_graph_with_code_labels(
+    mystart,
+    istates,
+    output_path_no_suffix,
+    color_map,
+    state_id_to_code,
+    highlight_codes=None,
+):
+    dot = render_train_graph(
+        mystart,
+        istates,
+        show_legend=False,
+        color_map=color_map,
+    )
+
+    # Replace only the first line in node labels:
+    # <<B>{STATE_LABEL}<BR/>(n = ...)</B>>
+    pattern = re.compile(r"(<<B>)([^<]+)(<BR/>\(n = \d+\)</B>>)")
+
+    def repl(match):
+        prefix, state_label, suffix = match.groups()
+        mapped = _map_state_label_text(
+            state_label,
+            state_id_to_code,
+            highlight_codes=highlight_codes,
+        )
+        return f"{prefix}{mapped}{suffix}"
+
+    src = pattern.sub(repl, dot.source)
+    graphviz.Source(src).render(output_path_no_suffix, format="pdf", cleanup=True)
 
 
 def make_cluster_scatter(q_clustered, q_cols, output_path_png, output_path_pdf):
@@ -227,7 +299,8 @@ def make_cluster_scatter(q_clustered, q_cols, output_path_png, output_path_pdf):
     plt.legend(title="Patient cluster", frameon=False)
     sns.despine()
     plt.tight_layout()
-    plt.savefig(output_path_png, dpi=300, bbox_inches="tight")
+    if SAVE_CLUSTER_PNG:
+        plt.savefig(output_path_png, dpi=300, bbox_inches="tight")
     plt.savefig(output_path_pdf, dpi=400, bbox_inches="tight")
     plt.close()
 
@@ -255,12 +328,8 @@ def make_cluster_scatter_jitter(q_clustered, q_cols, output_path_png, output_pat
     )
     handles = [
         plt.Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            markerfacecolor=color_map[cl],
-            markersize=8,
+            [0], [0], marker="o", color="w",
+            markerfacecolor=color_map[cl], markersize=8,
             label=f"Cluster {int(cl) + 1}",
         )
         for cl in clusters
@@ -273,7 +342,8 @@ def make_cluster_scatter_jitter(q_clustered, q_cols, output_path_png, output_pat
     plt.ylim(-0.05, 1.05)
     plt.grid(alpha=0.2)
     plt.tight_layout()
-    plt.savefig(output_path_png, dpi=300)
+    if SAVE_CLUSTER_PNG:
+        plt.savefig(output_path_png, dpi=300)
     plt.savefig(output_path_pdf, bbox_inches="tight")
     plt.close()
 
@@ -305,7 +375,6 @@ def make_cluster_size_with_q(q_clustered, output_path_pdf):
     ax.set_xlabel("Patient cluster")
     ax.set_ylabel("Number of patients")
     ax.set_title("Pathway-specific model contributions", weight="bold", pad=10)
-
     for i, count in enumerate(cluster_counts.values):
         ax.text(i, count + max(cluster_counts.values) * 0.02, str(count), ha="center", fontweight="bold")
 
@@ -316,13 +385,12 @@ def make_cluster_size_with_q(q_clustered, output_path_pdf):
     plt.close()
 
 
-def make_admixture_barplot(q_clustered, output_path):
+def make_admixture_barplot(q_clustered, output_path_pdf):
     q_cols = [c for c in q_clustered.columns if c.startswith("q")]
     if not q_cols:
         return
 
     data_q = q_clustered[q_cols].copy()
-    # Ensure numeric q-columns before ranking/sorting.
     for col in q_cols:
         data_q[col] = pd.to_numeric(data_q[col], errors="coerce")
 
@@ -331,16 +399,14 @@ def make_admixture_barplot(q_clustered, output_path):
     data_q = data_q.sort_values(["dominant", "dominant_val"], ascending=[True, False])
     data_q = data_q.drop(columns=["dominant", "dominant_val"]).reset_index(drop=True)
 
-    colors = CUSTOM_PATHWAY_COLORS
     n = len(data_q)
     k = len(q_cols)
-
     fig, ax = plt.subplots(figsize=(12, 4), dpi=120)
     for i in range(n):
         bottom = 0.0
         for j in range(k):
             val = data_q.iloc[i, j]
-            ax.bar(i, val, bottom=bottom, width=1.0, color=colors[j % len(colors)], linewidth=0)
+            ax.bar(i, val, bottom=bottom, width=1.0, color=CUSTOM_PATHWAY_COLORS[j % len(CUSTOM_PATHWAY_COLORS)], linewidth=0)
             bottom += val
 
     ax.set_ylabel("Admixture weight")
@@ -351,7 +417,7 @@ def make_admixture_barplot(q_clustered, output_path):
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend([f"Pathway {i+1}" for i in range(k)], bbox_to_anchor=(1.01, 1), loc="upper left", frameon=False)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path_pdf, dpi=300)
     plt.close()
 
 
@@ -367,19 +433,15 @@ def plot_metric_with_na(ax, df, metric_col, title, color, ylim=None):
     ax.set_title(title, weight="bold")
     ax.set_xlabel("Train-test split")
     ax.set_ylabel("Validation score")
-
     if ylim is not None:
         ax.set_ylim(*ylim)
-
     if len(vals) > 0:
         mean_val = np.nanmean(vals)
         ax.axhline(mean_val, linestyle="--", linewidth=1.2, color="black", alpha=0.6)
-
     for idx, raw_val in enumerate(raw_vals):
         if pd.isna(raw_val):
             y_text = (ylim[1] * 0.05) if ylim else 0.05
             ax.text(idx, y_text, "N/A", ha="center", fontsize=9)
-
     sns.despine(ax=ax)
 
 
@@ -400,33 +462,38 @@ def save_validation_figure(cluster_quality_df, out_path, panel_prefix=False):
     plt.close()
 
 
+# =====================================================
+# Main
+# =====================================================
+
 def main():
+
     step1_dir = RESULT_BASE / "step1" / "training_splits"
     step1_full_dir = RESULT_BASE / "step1" / "full_data"
     step2_dir = RESULT_BASE / "step2"
     step3_dir = RESULT_BASE / "step3"
-    transitions_dir = step2_dir / "filtered_transition_matrices"
     data_dir = RESULT_BASE / "data"
 
-    for p in [step1_dir, step1_full_dir, step2_dir, step3_dir, transitions_dir, data_dir]:
+    for p in [step1_dir, step1_full_dir, step2_dir, step3_dir, data_dir]:
         p.mkdir(parents=True, exist_ok=True)
+
     print("Generating simulated data...")
     df_events, df_patients_truth, sim_meta = load_and_simulate_events()
-    write_simulation_readme(RESULT_BASE, simulation_metadata=sim_meta)
+    write_simulation_readme(RESULT_BASE, sim_meta)
+
     df_framework, code_to_state = to_framework_df(df_events)
+    state_id_to_code = {v: k for k, v in code_to_state.items()}
+    backbone_code_set = set(sim_meta.get("BACKBONE_CODES", []))
 
-    df_events.to_csv(data_dir / "simulated_events.csv", index=False)
+    if SAVE_RAW_EVENT_TABLES:
+        df_events.to_csv(data_dir / "simulated_events.csv", index=False)
+        df_framework.to_csv(data_dir / "simulated_framework_df.csv", index=False)
+    # Keep truth table because recovery evaluation consumes it.
     df_patients_truth.to_csv(data_dir / "simulated_patients_truth.csv", index=False)
-    df_framework.to_csv(data_dir / "simulated_framework_df.csv", index=False)
-    pd.DataFrame(
-        [{"code": c, "state_id": s} for c, s in code_to_state.items()]
-    ).to_csv(data_dir / "state_mapping.csv", index=False)
-    with open(data_dir / "simulation_metadata.json", "w") as f:
-        json.dump(sim_meta, f, indent=2)
-    print(f"Saved simulation data to: {data_dir}")
 
-    print("Step 1 full-data graph on simulated data...")
     simulation_step1_color_map = build_simulation_step1_color_map(df_framework["states"].astype(int).tolist())
+
+    print("Step 1 full-data graph...")
     patvec_full = build_patient_objects(df_framework)
     mystart_full = build_prefix_tree(patvec_full)
     mystart_full, istates_full = run_simplification_pipeline(
@@ -437,21 +504,20 @@ def main():
         prune_abs_threshold=SIMULATION_SETTINGS.simplification.prune_abs_threshold,
         manual_protected_state_ids=SIMULATION_SETTINGS.simplification.manual_protected_state_ids,
     )
-    dot_full = render_train_graph(
+    render_train_graph_with_code_labels(
         mystart_full,
         istates_full,
-        show_legend=False,
-        color_map=simulation_step1_color_map,
+        step1_full_dir / "graph",
+        simulation_step1_color_map,
+        state_id_to_code,
+        highlight_codes=backbone_code_set,
     )
-    dot_full.render(step1_full_dir / "graph", format="pdf", cleanup=True)
-    print(f"Saved full-data graph: {step1_full_dir / 'graph.pdf'}")
 
-    print("Step 1 on simulated data...")
+    print("Step 1...")
     split_results = []
+
     for seed in SEEDS:
         print(f"  Seed {seed}")
-        seed_dir = step1_dir / f"seed_{seed}"
-        seed_dir.mkdir(parents=True, exist_ok=True)
 
         a_df_train, a_df_test = train_test_split(df_framework, seed=seed)
         train_ids = set(a_df_train["patient_num"].unique())
@@ -459,6 +525,7 @@ def main():
 
         patvec_train = build_patient_objects(a_df_train)
         mystart_train = build_prefix_tree(patvec_train)
+
         mystart_train, istates_train = run_simplification_pipeline(
             mystart_train,
             importance_keep_threshold=SIMULATION_SETTINGS.simplification.importance_keep_threshold,
@@ -468,20 +535,22 @@ def main():
             manual_protected_state_ids=SIMULATION_SETTINGS.simplification.manual_protected_state_ids,
         )
 
-        dot_train = render_train_graph(
-            mystart_train,
-            istates_train,
-            show_legend=False,
-            color_map=simulation_step1_color_map,
-        )
-        dot_train.render(seed_dir / "graph", format="pdf", cleanup=True)
-
-        train_states = sorted(a_df_train["states"].astype(int).unique())
         branch_matrices = build_branch_transition_matrices(
             mystart_train,
             a_df_train,
-            state_list=train_states,
+            state_list=sorted(a_df_train["states"].unique()),
         )
+        seed_dir = step1_dir / f"seed_{seed}"
+        seed_dir.mkdir(parents=True, exist_ok=True)
+        render_train_graph_with_code_labels(
+            mystart_train,
+            istates_train,
+            seed_dir / "graph",
+            simulation_step1_color_map,
+            state_id_to_code,
+            highlight_codes=backbone_code_set,
+        )
+
         split_results.append(
             {
                 "seed": seed,
@@ -492,19 +561,18 @@ def main():
             }
         )
 
-    split_path = step1_dir / "split_results.pkl"
-    with open(split_path, "wb") as f:
-        pickle.dump(split_results, f)
-    print(f"Saved Step 1 results: {split_path}")
+    if SAVE_STEP1_SPLIT_PICKLE:
+        with open(step1_dir / "split_results.pkl", "wb") as f:
+            pickle.dump(split_results, f)
 
-    print("Step 2 on simulated data...")
+    print("Step 2...")
     df_filtered = filter_rare_states(df_framework, min_count=MIN_STATE_COUNT)
-    all_filtered_states = sorted(df_filtered["states"].astype(int).unique())
-    q_results_all = {}
+    all_states = sorted(df_filtered["states"].unique())
 
     for split in split_results:
         seed = split["seed"]
         print(f"  Seed {seed}")
+
         train_filtered, test_filtered = apply_filter_to_split(
             df_filtered,
             split["train_ids"],
@@ -514,63 +582,53 @@ def main():
         filtered_branch_matrices = build_branch_transition_matrices(
             split["graph"],
             train_filtered,
-            state_list=all_filtered_states,
+            state_list=all_states,
         )
-
-        seed_transition_dir = transitions_dir / f"seed_{seed}"
-        seed_transition_dir.mkdir(parents=True, exist_ok=True)
-        for branch_name, matrix_df in filtered_branch_matrices.items():
-            safe_name = branch_name.replace("/", "_").replace(" ", "_")
-            matrix_df.to_csv(seed_transition_dir / f"{safe_name}.csv")
 
         test_sequences = make_sequences(test_filtered)
         test_patient_ids = sorted(test_filtered["patient_num"].unique())
-        transition_matrices = [mat.to_numpy() for mat in filtered_branch_matrices.values()]
-        state_to_index = {s: i for i, s in enumerate(all_filtered_states)}
+        transition_matrices = [m.to_numpy() for m in filtered_branch_matrices.values()]
+        state_to_index = {s: i for i, s in enumerate(all_states)}
 
         q_em = estimate_q_matrix_em(test_sequences, transition_matrices, state_to_index)
         q_slsqp = estimate_q_matrix_slsqp(test_sequences, transition_matrices, state_to_index)
+
         q_em.insert(0, "patient_num", test_patient_ids)
         q_slsqp.insert(0, "patient_num", test_patient_ids)
 
         q_em.to_csv(step2_dir / f"q_vectors_seed_{seed}_em.csv", index=False)
         q_slsqp.to_csv(step2_dir / f"q_vectors_seed_{seed}_slsqp.csv", index=False)
 
-        q_results_all[seed] = {
-            "filtered_branch_matrices": filtered_branch_matrices,
-            "em": q_em,
-            "slsqp": q_slsqp,
-        }
-
-    with open(step2_dir / "q_results_all_seeds.pkl", "wb") as f:
-        pickle.dump(q_results_all, f)
-    print(f"Saved Step 2 results: {step2_dir}")
-
-    print("Step 3 on simulated data...")
+    print("Step 3...")
     cluster_quality_rows = []
+
     q_files = sorted(step2_dir.glob("q_vectors_seed_*_*.csv"))
+
     for q_path in q_files:
         parts = q_path.stem.split("_")
-        if len(parts) < 5:
-            continue
-
         seed = parts[3]
         method = parts[4]
+
         q_df = pd.read_csv(q_path)
 
         q_clustered, centers_df, silhouette, calinski, davies = cluster_q_vectors(
             q_df, n_clusters=N_CLUSTERS
         )
-
         seed_result_dir = step3_dir / f"seed_{seed}_{method}"
         seed_result_dir.mkdir(parents=True, exist_ok=True)
-        q_clustered.to_csv(seed_result_dir / "clustered_q.csv", index=False)
+        if SAVE_STEP3_CLUSTERED_Q:
+            q_clustered.to_csv(seed_result_dir / "clustered_q.csv", index=False)
         centers_df.to_csv(seed_result_dir / "cluster_centers.csv", index=False)
         with open(seed_result_dir / "silhouette.txt", "w") as f:
             f.write(f"{silhouette:.6f}")
 
         q_cols = [c for c in q_df.columns if c.startswith("q")]
-        make_cluster_scatter(q_clustered, q_cols, seed_result_dir / "cluster_plot.png", seed_result_dir / "cluster_plot.pdf")
+        make_cluster_scatter(
+            q_clustered,
+            q_cols,
+            seed_result_dir / "cluster_plot.png",
+            seed_result_dir / "cluster_plot.pdf",
+        )
         make_cluster_scatter_jitter(
             q_clustered,
             q_cols,
@@ -578,10 +636,7 @@ def main():
             seed_result_dir / "cluster_plot_jitter.pdf",
         )
         make_cluster_size_with_q(q_clustered, seed_result_dir / "cluster_sizes_with_q.pdf")
-        make_admixture_barplot(
-            q_clustered,
-            seed_result_dir / "admixture_barplot.png",
-        )
+        make_admixture_barplot(q_clustered, seed_result_dir / "admixture_barplot.pdf")
 
         cluster_quality_rows.append(
             {
@@ -600,7 +655,6 @@ def main():
         cluster_quality_df.to_csv(step3_dir / "cluster_validation_metrics.csv", index=False)
 
         save_validation_figure(cluster_quality_df, step3_dir / "cluster_validation.pdf", panel_prefix=True)
-
         for method_name in ["em", "slsqp"]:
             method_df = cluster_quality_df[cluster_quality_df["method"] == method_name].copy()
             if method_df.empty:
@@ -612,8 +666,7 @@ def main():
                 panel_prefix=False,
             )
 
-    print(f"Saved Step 3 results: {step3_dir}")
-    print("\nSimulation framework run completed.")
+    print("\nSimulation framework run completed successfully.")
 
 
 if __name__ == "__main__":
