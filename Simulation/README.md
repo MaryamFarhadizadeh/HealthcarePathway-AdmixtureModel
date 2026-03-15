@@ -74,18 +74,15 @@ Outputs:
 
 ## Main output files
 
-- `results/simulation/data/simulated_patients_truth.csv`
 - `results/simulation/step1/full_data/graph.pdf`
-- `results/simulation/step1/training_splits/seed_*/graph.pdf`
-- `results/simulation/step2/q_vectors_seed_*_em.csv`
-- `results/simulation/step2/q_vectors_seed_*_slsqp.csv`
-- `results/simulation/step3/seed_*_*/admixture_barplot.pdf`
-- `results/simulation/step3/seed_*_*/cluster_plot.pdf`
-- `results/simulation/step3/seed_*_*/cluster_plot_jitter.pdf`
-- `results/simulation/step3/seed_*_*/cluster_sizes_with_q.pdf`
 - `results/simulation/step3/cluster_validation_metrics.csv`
 - `results/simulation/step3/cluster_validation_em.pdf`
 - `results/simulation/step3/cluster_validation_slsqp.pdf`
+- `results/simulation/evaluation/recovery_summary.csv`
+
+Per-seed Step 3 figures are in:
+
+- `results/simulation/step3/seed_*_*/`
 
 ## Optional outputs (disabled by default)
 
