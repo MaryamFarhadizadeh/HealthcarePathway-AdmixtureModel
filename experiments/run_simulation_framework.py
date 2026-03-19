@@ -53,7 +53,7 @@ from pathway_admixture.settings_profiles import SIMULATION_SETTINGS
 # =====================================================
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-SIM_SCRIPT = BASE_DIR / "Simulation" / "Simulation2.py"
+SIM_SCRIPT = BASE_DIR / "Simulation" / "Simulation.py"
 RESULT_BASE = BASE_DIR / "results" / "simulation"
 
 SEEDS = list(SIMULATION_SETTINGS.seeds)
