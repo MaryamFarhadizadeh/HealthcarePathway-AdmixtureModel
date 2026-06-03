@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class SimplificationSettings:
-    importance_keep_threshold: float = 5.0
+    importance_keep_threshold: float = 10.0
     unimportant_threshold: float = 10.0
     prune_rel_threshold: float = 0.1
     prune_abs_threshold: int = 5
@@ -28,9 +28,9 @@ REAL_DATA_SETTINGS = FrameworkSettings(
     use_filtered_step1_results=False,
     simplification=SimplificationSettings(
         importance_keep_threshold=5.0,
-        unimportant_threshold=10.0,
+        unimportant_threshold=5.0,
         prune_rel_threshold=0.1,
-        prune_abs_threshold=5,
+        prune_abs_threshold=3,
         manual_protected_state_ids=(),
     ),
 )
@@ -64,7 +64,7 @@ SIMULATION_SETTINGS = FrameworkSettings(
         # Matches your simulation-focused thresholds.
         importance_keep_threshold=20.0,
         unimportant_threshold=20.0,
-        prune_rel_threshold=0.1,
+        prune_rel_threshold=0.15,
         prune_abs_threshold=3,
         manual_protected_state_ids=(91, 166),
     ),

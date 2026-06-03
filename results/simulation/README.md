@@ -1,9 +1,9 @@
 # Simulation Results
 
-Generated using Option A (single latent backbone per patient).
+Generated using a dominant-backbone + controlled-switching simulation design.
 
 ## Last Updated (UTC)
-2026-03-05 17:44:55 UTC
+2026-03-25 17:48:13 UTC
 
 ## Active Settings Profile
 - seeds: [35, 123, 2025]

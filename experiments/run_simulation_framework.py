@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 import graphviz
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -349,20 +350,24 @@ def make_cluster_scatter_jitter(q_clustered, q_cols, output_path_png, output_pat
 
 
 def make_cluster_size_with_q(q_clustered, output_path_pdf):
-    q_cols = [c for c in q_clustered.columns if c.startswith("q")]
+    q_cols = sorted(
+        [c for c in q_clustered.columns if c.startswith("q")],
+        key=lambda x: int(x[1:]) if x[1:].isdigit() else x,
+    )
     if not q_cols:
         return
 
     cluster_counts = q_clustered["cluster"].value_counts().sort_index()
     cluster_means = q_clustered.groupby("cluster")[q_cols].mean()
     colors = CUSTOM_PATHWAY_COLORS[: len(q_cols)]
+    cluster_labels = [str(int(c) + 1) for c in cluster_counts.index]
 
     fig, ax = plt.subplots(figsize=(7, 6))
     bottoms = np.zeros(len(cluster_counts))
     for i, (col, color) in enumerate(zip(q_cols, colors)):
         values = cluster_means[col].values * cluster_counts.values
         ax.bar(
-            cluster_counts.index.astype(str),
+            cluster_labels,
             values,
             bottom=bottoms,
             color=color,
@@ -378,7 +383,11 @@ def make_cluster_size_with_q(q_clustered, output_path_pdf):
     for i, count in enumerate(cluster_counts.values):
         ax.text(i, count + max(cluster_counts.values) * 0.02, str(count), ha="center", fontweight="bold")
 
-    ax.legend(title="Pathway", frameon=False)
+    legend_handles = [
+        Patch(facecolor=colors[i], edgecolor="white", label=f"Pathway {i+1}")
+        for i in range(len(q_cols))
+    ]
+    ax.legend(handles=legend_handles, title="Pathway", frameon=False)
     sns.despine()
     plt.tight_layout()
     plt.savefig(output_path_pdf, dpi=400, bbox_inches="tight")
@@ -386,7 +395,10 @@ def make_cluster_size_with_q(q_clustered, output_path_pdf):
 
 
 def make_admixture_barplot(q_clustered, output_path_pdf):
-    q_cols = [c for c in q_clustered.columns if c.startswith("q")]
+    q_cols = sorted(
+        [c for c in q_clustered.columns if c.startswith("q")],
+        key=lambda x: int(x[1:]) if x[1:].isdigit() else x,
+    )
     if not q_cols:
         return
 
@@ -415,7 +427,11 @@ def make_admixture_barplot(q_clustered, output_path_pdf):
     ax.set_xlim([-1, n])
     ax.set_title("Admixture proportions across the three pathway-specific models")
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend([f"Pathway {i+1}" for i in range(k)], bbox_to_anchor=(1.01, 1), loc="upper left", frameon=False)
+    legend_handles = [
+        Patch(facecolor=CUSTOM_PATHWAY_COLORS[i % len(CUSTOM_PATHWAY_COLORS)], edgecolor="none", label=f"Pathway {i+1}")
+        for i in range(k)
+    ]
+    ax.legend(handles=legend_handles, bbox_to_anchor=(1.01, 1), loc="upper left", frameon=False)
     plt.tight_layout()
     plt.savefig(output_path_pdf, dpi=300)
     plt.close()
