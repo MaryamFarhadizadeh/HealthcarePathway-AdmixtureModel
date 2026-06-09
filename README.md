@@ -8,6 +8,13 @@ This repository contains a simulation-focused implementation of a 3-step framewo
 
 The public version is intentionally simulation-only. Legacy real-data scripts/results are kept locally in `archive/` and excluded from Git.
 
+## Reference
+
+This repository contains the simulation-focused implementation of the methodology described in:
+
+Farhadizadeh et al.  
+"Typical Healthcare Pathways as a Basis for Admixture Modeling of Patient Trajectories"
+
 ## Repository Structure
 
 - `Simulation/Simulation.py`: synthetic cohort generator
@@ -54,6 +61,8 @@ These are the ground-truth admixture targets used in recovery evaluation.
 
 ## Notes
 
+- The clinical data used in the study are not publicly available due to data protection and institutional restrictions.
+- This public repository provides the implementation of the methodology together with simulated examples that reproduce the workflow.
 - Step 1 uses full simulated framework data for branch discovery.
 - Step 2 applies preprocessing/filtering and estimates transition matrices + `q` on filtered state space.
 - Step 3 clusters patients using Step 2 `q` vectors.
