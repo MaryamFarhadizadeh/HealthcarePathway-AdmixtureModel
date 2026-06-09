@@ -1,12 +1,10 @@
-# Healthcare Pathways Admixture Model (Simulation-Only)
+# Typical Healthcare Pathways Admixture Modeling
 
 This repository contains a simulation-focused implementation of a 3-step framework:
 
 1. Pathway graph discovery (Step 1)
 2. Transition-matrix + admixture estimation (Step 2)
 3. Clustering in admixture space (Step 3)
-
-The public version is intentionally simulation-only. Legacy real-data scripts/results are kept locally in `archive/` and excluded from Git.
 
 ## Reference
 
