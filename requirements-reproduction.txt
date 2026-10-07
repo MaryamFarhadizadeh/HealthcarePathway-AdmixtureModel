@@ -1,0 +1,21 @@
+# Runtime environment for the synthetic workflow, Python 3.12.5, macOS arm64.
+# Graphviz executable 12.1.0 is a separate system dependency.
+# These pins include the active transitive runtime dependencies on this platform.
+contourpy==1.3.3
+cycler==0.12.1
+fonttools==4.61.1
+graphviz==0.21
+joblib==1.5.3
+kiwisolver==1.4.9
+matplotlib==3.10.8
+numpy==2.4.2
+packaging==26.0
+pandas==3.0.1
+pillow==12.1.1
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+scikit-learn==1.8.0
+scipy==1.17.0
+seaborn==0.13.2
+six==1.17.0
+threadpoolctl==3.6.0

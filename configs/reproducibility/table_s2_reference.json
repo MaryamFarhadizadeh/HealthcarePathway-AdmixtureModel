@@ -1,0 +1,23 @@
+{
+  "source": "Supplementary Table S2 (revised), EM, mean over the three train-test splits.",
+  "em": {
+    "low": {
+      "MAE": 0.234,
+      "Correlation": 0.834,
+      "ARI": 0.94,
+      "Silhouette": 0.923
+    },
+    "moderate": {
+      "MAE": 0.257,
+      "Correlation": 0.785,
+      "ARI": 0.774,
+      "Silhouette": 0.897
+    },
+    "high": {
+      "MAE": 0.254,
+      "Correlation": 0.784,
+      "ARI": 0.774,
+      "Silhouette": 0.876
+    }
+  }
+}

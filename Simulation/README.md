@@ -1,5 +1,11 @@
 # Applying the Framework to Simulated Data
 
+For new runs, use the [reproducibility guide](../docs/reproducibility.md) and
+`experiments/reproduce_simulations.py`. Complete low/moderate/high configurations
+are under `configs/reproducibility/`. This entry point saves each scenario
+separately and refuses to overwrite existing outputs. The older commands below
+write to a shared output directory and are retained for reference.
+
 This guide explains how to run the full pathway-admixture framework on simulated data only.
 
 Current simulation logic: each patient has a Dirichlet-sampled admixture vector (`theta`), a dominant backbone label, and controlled within-trajectory backbone switching.
@@ -98,5 +104,6 @@ If you enable these flags, additional intermediate files (PNG plots, pickles, ra
 ## Notes on interpretation
 
 - If Step 3 shows only 2 chains, verify `BACKBONE_MODE` and whether Step 1 recovered only 2 top-level branches.
-- Recovery metrics are scenario-dependent; `step1_hard` should score worse than `step1_easy`.
+- Recovery metrics are scenario-dependent; a monotone ordering is not guaranteed
+  and must be evaluated rather than assumed.
 - `results/simulation/README.md` is auto-refreshed by the runner with exact settings used for each run.

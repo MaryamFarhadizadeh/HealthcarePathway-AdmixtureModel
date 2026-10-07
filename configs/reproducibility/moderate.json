@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "name": "moderate",
+  "description": "Configuration of the moderate-mixing simulation scenario (Supplementary Section S1).",
+  "generator": {
+    "scenario": "step1_medium",
+    "n_patients": 400,
+    "random_seed": 42,
+    "backbone_mode": "three_source",
+    "backbones": {
+      "B1": [
+        "a",
+        "b",
+        "f",
+        "h",
+        "e"
+      ],
+      "B2": [
+        "a",
+        "c",
+        "g",
+        "h",
+        "e"
+      ],
+      "B3": [
+        "a",
+        "d",
+        "i",
+        "h",
+        "e"
+      ]
+    },
+    "anchor_codes": {
+      "B1": "u",
+      "B2": "v",
+      "B3": "w"
+    },
+    "vertical_noise_codes": [
+      "x",
+      "y",
+      "z"
+    ],
+    "horizontal_noise_codes": [
+      "t"
+    ],
+    "parameters": {
+      "p_add_vertical_noise": 0.35,
+      "max_vertical_noise": 1,
+      "p_add_horizontal_noise": 0.2,
+      "max_horizontal_nodes": 1,
+      "p_repeat_node": 0.08,
+      "p_skip_node": 0.05,
+      "p_add_anchor": 0.75,
+      "dirichlet_alpha": 1.0,
+      "p_backbone_switch": 0.22
+    }
+  },
+  "framework": {
+    "seeds": [
+      35,
+      123,
+      2025
+    ],
+    "min_state_count": 5,
+    "n_clusters": 3,
+    "use_filtered_step1_results": false,
+    "code_map": {
+      "a": 0,
+      "b": 10,
+      "c": 30,
+      "d": 54,
+      "e": 166,
+      "f": 106,
+      "g": 119,
+      "h": 164,
+      "i": 91,
+      "u": 201,
+      "v": 202,
+      "w": 203,
+      "t": 204,
+      "x": 205,
+      "y": 206,
+      "z": 207
+    },
+    "simplification": {
+      "importance_keep_threshold": 20.0,
+      "unimportant_threshold": 20.0,
+      "prune_rel_threshold": 0.15,
+      "prune_abs_threshold": 3,
+      "manual_protected_state_ids": [
+        91,
+        166
+      ]
+    }
+  },
+  "algorithm": {
+    "train_fraction": 0.8,
+    "filter_scope": "full_cohort",
+    "event_representation": "individual_codes_sorted_by_time_then_state",
+    "initial_weights": "uniform",
+    "likelihood_floor": 1e-08,
+    "em_max_iterations": 50,
+    "em_weight_tolerance": 1e-06,
+    "em_unsupported_transition": "uniform_responsibilities",
+    "slsqp_options": "scipy_defaults",
+    "clustering_seed": 42,
+    "clustering_n_init": 20,
+    "plot_jitter_seed": 42
+  }
+}

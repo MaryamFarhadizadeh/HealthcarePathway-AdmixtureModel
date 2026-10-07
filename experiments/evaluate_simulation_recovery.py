@@ -24,7 +24,6 @@ SIM_DIR = BASE_DIR / "results" / "simulation"
 TRUTH_PATH = SIM_DIR / "data" / "simulated_patients_truth.csv"
 STEP2_DIR = SIM_DIR / "step2"
 OUT_DIR = SIM_DIR / "evaluation"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =====================================================
@@ -35,9 +34,12 @@ def best_column_matching(est_df: pd.DataFrame, truth_df: pd.DataFrame):
     est_cols = [c for c in est_df.columns if c.startswith("q")]
     truth_cols = [c for c in truth_df.columns if c.startswith("theta_")]
 
-    k = min(len(est_cols), len(truth_cols))
-    est_cols = est_cols[:k]
-    truth_cols = truth_cols[:k]
+    if not est_cols or len(est_cols) != len(truth_cols):
+        raise ValueError(
+            "Continuous recovery requires equal estimated and true component counts; "
+            "refusing to silently truncate components."
+        )
+    k = len(est_cols)
 
     best_perm = None
     best_mae = np.inf
@@ -66,18 +68,23 @@ def corr_safe(a: pd.Series, b: pd.Series) -> float:
 # Main Evaluation
 # =====================================================
 
-def main():
+def main(sim_dir=None):
 
-    if not TRUTH_PATH.exists():
-        raise FileNotFoundError(f"Missing truth file: {TRUTH_PATH}")
+    sim_dir = Path(sim_dir) if sim_dir is not None else SIM_DIR
+    truth_path = sim_dir / "data" / "simulated_patients_truth.csv"
+    step2_dir = sim_dir / "step2"
+    out_dir = sim_dir / "evaluation"
 
-    truth = pd.read_csv(TRUTH_PATH)
+    if not truth_path.exists():
+        raise FileNotFoundError(f"Missing truth file: {truth_path}")
+
+    truth = pd.read_csv(truth_path)
     truth = truth.rename(columns={"patient_id": "patient_num"})
     truth["patient_num"] = truth["patient_num"].astype(str)
 
-    q_files = sorted(STEP2_DIR.glob("q_vectors_seed_*_*.csv"))
+    q_files = sorted(step2_dir.glob("q_vectors_seed_*_*.csv"))
     if not q_files:
-        raise FileNotFoundError(f"No q-vector files in {STEP2_DIR}")
+        raise FileNotFoundError(f"No q-vector files in {step2_dir}")
 
     rows = []
 
@@ -93,9 +100,9 @@ def main():
         q = pd.read_csv(q_path)
         q["patient_num"] = q["patient_num"].astype(str)
 
-        merged = q.merge(truth, on="patient_num", how="inner")
-        if merged.empty:
-            continue
+        merged = q.merge(truth, on="patient_num", how="left", validate="one_to_one", indicator=True)
+        if merged.empty or not merged["_merge"].eq("both").all():
+            raise ValueError(f"Missing truth for estimated patients in {q_path}")
 
         # -----------------------------
         # Continuous recovery (theta)
@@ -145,7 +152,8 @@ def main():
         print("No evaluable q files found.")
         return
 
-    metrics.to_csv(OUT_DIR / "recovery_metrics.csv", index=False)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    metrics.to_csv(out_dir / "recovery_metrics.csv", index=False)
 
     summary = (
         metrics.groupby("method", as_index=False)[
@@ -161,9 +169,9 @@ def main():
         .sort_values("global_mae")
     )
 
-    summary.to_csv(OUT_DIR / "recovery_summary.csv", index=False)
+    summary.to_csv(out_dir / "recovery_summary.csv", index=False)
 
-    print(f"\nSaved recovery metrics to {OUT_DIR}")
+    print(f"\nSaved recovery metrics to {out_dir}")
     print("\nSummary:")
     print(summary.to_string(index=False))
 

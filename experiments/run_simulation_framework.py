@@ -11,6 +11,7 @@ import random
 import os
 import json
 import re
+from dataclasses import asdict
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -124,12 +125,25 @@ Generated using a dominant-backbone + controlled-switching simulation design.
 # Load Simulation
 # =====================================================
 
-def load_and_simulate_events():
+def load_and_simulate_events(generator_config=None):
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("simulation_module", SIM_SCRIPT)
     sim = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sim)
+
+    # The reproducibility entry point supplies a complete, saved configuration.
+    # Legacy calls continue to use the generator's existing defaults.
+    if generator_config is not None:
+        sim.N_PATIENTS = generator_config["n_patients"]
+        sim.RANDOM_SEED = generator_config["random_seed"]
+        sim.SIMULATION_SCENARIO = generator_config["scenario"]
+        sim.BACKBONE_MODE = generator_config["backbone_mode"]
+        sim.BACKBONES = generator_config["backbones"]
+        sim.ANCHOR_CODES = generator_config["anchor_codes"]
+        sim.VERTICAL_NOISE_CODES = generator_config["vertical_noise_codes"]
+        sim.HORIZONTAL_NOISE_CODES = generator_config["horizontal_noise_codes"]
+        sim.CFG = sim.ScenarioConfig(**generator_config["parameters"])
 
     random.seed(sim.RANDOM_SEED)
     cohort = sim.simulate_cohort(sim.N_PATIENTS)
@@ -140,6 +154,11 @@ def load_and_simulate_events():
         "SIMULATION_SCENARIO": getattr(sim, "SIMULATION_SCENARIO", None),
         "BACKBONE_MODE": getattr(sim, "BACKBONE_MODE", None),
         "DIRICHLET_ALPHA": getattr(sim.CFG, "dirichlet_alpha", None),
+        "parameters": asdict(sim.CFG),
+        "backbones": sim.BACKBONES,
+        "anchor_codes": sim.ANCHOR_CODES,
+        "vertical_noise_codes": sim.VERTICAL_NOISE_CODES,
+        "horizontal_noise_codes": sim.HORIZONTAL_NOISE_CODES,
         "BACKBONE_CODES": sorted(
             {
                 code
@@ -482,7 +501,7 @@ def save_validation_figure(cluster_quality_df, out_path, panel_prefix=False):
 # Main
 # =====================================================
 
-def main():
+def main(*, generator_config=None):
 
     step1_dir = RESULT_BASE / "step1" / "training_splits"
     step1_full_dir = RESULT_BASE / "step1" / "full_data"
@@ -494,10 +513,16 @@ def main():
         p.mkdir(parents=True, exist_ok=True)
 
     print("Generating simulated data...")
-    df_events, df_patients_truth, sim_meta = load_and_simulate_events()
+    df_events, df_patients_truth, sim_meta = load_and_simulate_events(generator_config)
     write_simulation_readme(RESULT_BASE, sim_meta)
+    (data_dir / "simulation_metadata.json").write_text(
+        json.dumps(sim_meta, indent=2) + "\n"
+    )
 
     df_framework, code_to_state = to_framework_df(df_events)
+    pd.DataFrame(
+        [{"code": code, "state": state} for code, state in code_to_state.items()]
+    ).to_csv(data_dir / "state_mapping.csv", index=False)
     state_id_to_code = {v: k for k, v in code_to_state.items()}
     backbone_code_set = set(sim_meta.get("BACKBONE_CODES", []))
 
@@ -558,6 +583,11 @@ def main():
         )
         seed_dir = step1_dir / f"seed_{seed}"
         seed_dir.mkdir(parents=True, exist_ok=True)
+        (seed_dir / "patient_split.json").write_text(json.dumps({
+            "seed": seed,
+            "train_ids": sorted(train_ids),
+            "test_ids": sorted(test_ids),
+        }, indent=2) + "\n")
         render_train_graph_with_code_labels(
             mystart_train,
             istates_train,
@@ -600,6 +630,13 @@ def main():
             train_filtered,
             state_list=all_states,
         )
+        transition_dir = step2_dir / "filtered_transition_matrices" / f"seed_{seed}"
+        transition_dir.mkdir(parents=True, exist_ok=True)
+        component_rows = []
+        for k, (branch, matrix) in enumerate(filtered_branch_matrices.items()):
+            matrix.to_csv(transition_dir / f"q{k}.csv")
+            component_rows.append({"component": f"q{k}", "branch_label": branch})
+        pd.DataFrame(component_rows).to_csv(transition_dir / "components.csv", index=False)
 
         test_sequences = make_sequences(test_filtered)
         test_patient_ids = sorted(test_filtered["patient_num"].unique())

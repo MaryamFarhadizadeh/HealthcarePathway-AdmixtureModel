@@ -27,10 +27,10 @@ REAL_DATA_SETTINGS = FrameworkSettings(
     n_clusters=3,
     use_filtered_step1_results=False,
     simplification=SimplificationSettings(
-        importance_keep_threshold=5.0,
-        unimportant_threshold=5.0,
+        importance_keep_threshold=10.0,
+        unimportant_threshold=10.0,
         prune_rel_threshold=0.1,
-        prune_abs_threshold=3,
+        prune_abs_threshold=5,
         manual_protected_state_ids=(),
     ),
 )

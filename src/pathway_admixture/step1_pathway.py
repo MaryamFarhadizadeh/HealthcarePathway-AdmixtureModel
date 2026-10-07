@@ -111,10 +111,13 @@ def run_simplification_pipeline(
 
     mystart.pruneNonDischargeNodes()
     print("After pruneNonDischargeNodes:", len(mystart.collectNodes([])))
+    mystart.pruneNonDischargeNodes()
+    print("After pruneNonDischargeNodes:", len(mystart.collectNodes([])))
+    
 
     return mystart, istates
 
-#------------Rendering the graph-----------------
+
 #------------Rendering the graph-----------------
 def render_train_graph(mystart, istates, show_legend=True, first_state_only=False, color_map=None):
 
